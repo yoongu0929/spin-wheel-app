@@ -47,6 +47,76 @@ function describeArc(cx, cy, r, startAngle, endAngle) {
   ].join(" ");
 }
 
+/** 폭죽 패턴 생성 함수 */
+function generateBursts() {
+  const bursts = [];
+  const burstCount = 12; // 한 번에 나올 폭죽 개수
+  for (let i = 0; i < burstCount; i++) {
+    const top = 15 + Math.random() * 65; // 15% ~ 80%
+    const left = 5 + Math.random() * 90; // 5% ~ 95%
+    const delay = (Math.random() * 0.25).toFixed(2); // 0 ~ 0.25s
+    const scale = (0.7 + Math.random() * 1.1).toFixed(2); // 0.7 ~ 1.8
+    const hue = Math.floor(30 + Math.random() * 300);
+    bursts.push({ id: `${Date.now()}_${i}`, top, left, delay, scale, hue });
+  }
+  return bursts;
+}
+
+/**
+ * rareWin 동안 계속 폭죽을 재생성하는 오버레이
+ */
+function FireworksOverlay() {
+  const [bursts, setBursts] = useState(generateBursts);
+
+  useEffect(() => {
+    // 최초 한 번 설정된 후, 주기적으로 새로운 폭죽 세트로 교체
+    const interval = setInterval(() => {
+      setBursts(generateBursts());
+    }, 350); // 0.35초마다 새로운 세트 -> 애니메이션이 겹치면서 계속 터지는 느낌
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="fw-overlay">
+      <div className="fw-bg-glow" />
+      {bursts.map((b) => (
+        <div
+          key={b.id}
+          className="fw-burst"
+          style={{
+            top: `${b.top}%`,
+            left: `${b.left}%`,
+            animationDelay: `${b.delay}s`,
+            transform: `translate3d(-50%, -50%, 0) scale(${b.scale})`
+          }}
+        >
+          <div
+            className="fw-core"
+            style={{
+              background: `radial-gradient(circle, hsla(${b.hue},100%,70%,1), transparent)`
+            }}
+          />
+          {Array.from({ length: 16 }).map((_, i) => {
+            const angle = (360 / 16) * i;
+            return (
+              <div
+                key={i}
+                className="fw-particle"
+                style={{
+                  "--angle": `${angle}deg`,
+                  "--hue": b.hue,
+                  animationDelay: `${b.delay}s`
+                }}
+              />
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Wheel({ wheel, index, onChange, onRemove }) {
   const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
@@ -55,14 +125,12 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
 
   const rareWinAudioRef = useRef(null);
 
-  // rare win용 사운드 준비 (public/rare-win.mp3 사용)
   useEffect(() => {
     if (typeof Audio !== "undefined") {
       rareWinAudioRef.current = new Audio("/rare-win.mp3");
     }
   }, []);
 
-  // 확률 합
   const totalProbability = wheel.options.reduce((sum, o) => {
     const p = Number(o.probability);
     return sum + (p > 0 ? p : 0);
@@ -116,7 +184,7 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
       return;
     }
 
-    setRareWin(false); // 이전 rare 상태 초기화
+    setRareWin(false);
 
     // 확률 기반 랜덤 선택
     const r = Math.random() * totalProbability;
@@ -132,12 +200,11 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
       }
     }
 
-    // "양수 확률 중 최저 확률"인지 체크
+    // 최저 양수 확률인지 확인
     let isRare = false;
     const positiveOptions = wheel.options.filter(
       (o) => Number(o.probability) > 0
     );
-
     if (positiveOptions.length > 0 && Number(chosen.probability) > 0) {
       const minProb = Math.min(
         ...positiveOptions.map((o) => Number(o.probability))
@@ -147,7 +214,7 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
       }
     }
 
-    // 각도 계산 (포인터 = 위쪽 90deg)
+    // 각도 계산 (포인터=위쪽 90도)
     let startAngle = 0;
     let chosenCenter = 0;
 
@@ -155,7 +222,6 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
       const p = Math.max(0, Number(opt.probability) || 0);
       const angle = (p / totalProbability) * 360;
       const endAngle = startAngle + angle;
-
       if (opt.id === chosen.id) {
         chosenCenter = startAngle + angle / 2;
       }
@@ -175,7 +241,6 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
       setResult(chosen.label || "(이름 없음)");
 
       if (isRare) {
-        // 레어 연출 발동
         setRareWin(true);
 
         if (rareWinAudioRef.current) {
@@ -187,20 +252,20 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
           }
         }
 
-        // 일정 시간 후 효과 제거
+        // rareWin 동안 FireworksOverlay가 계속 폭죽 생성
         setTimeout(() => {
           setRareWin(false);
-        }, 2200);
+        }, 2400); // 여기 값 = 임팩트 유지 시간
       }
     }, 2600);
   };
 
-  // SVG slice 계산
+  // SVG 영역 계산
   const size = 260;
   const radius = size / 2 - 4;
   const center = size / 2;
-
   let currentAngle = 0;
+
   const slices = wheel.options.map((opt, i) => {
     const p = Math.max(0, Number(opt.probability) || 0);
     const angle =
@@ -229,145 +294,148 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
   });
 
   return (
-    <div className={`wheel-card ${rareWin ? "rare-win" : ""}`}>
-      {rareWin && (
-        <div className="rare-banner">
-          🎉 RARE HIT! 🎉
+    <>
+      {rareWin && <FireworksOverlay />}
+
+      <div className={`wheel-card ${rareWin ? "rare-win" : ""}`}>
+        {rareWin && (
+          <div className="rare-banner">
+            🎉 RARE HIT! 🎉
+          </div>
+        )}
+
+        <div className="wheel-header">
+          <input
+            className="wheel-title-input"
+            value={wheel.name}
+            onChange={handleNameChange}
+            placeholder={`돌림판 ${index}`}
+          />
+          <div className="wheel-header-actions">
+            <button className="ghost-btn" onClick={addOption}>
+              + 옵션 추가
+            </button>
+            <button className="danger-btn" onClick={onRemove}>
+              삭제
+            </button>
+          </div>
         </div>
-      )}
 
-      <div className="wheel-header">
-        <input
-          className="wheel-title-input"
-          value={wheel.name}
-          onChange={handleNameChange}
-          placeholder={`돌림판 ${index}`}
-        />
-        <div className="wheel-header-actions">
-          <button className="ghost-btn" onClick={addOption}>
-            + 옵션 추가
-          </button>
-          <button className="danger-btn" onClick={onRemove}>
-            삭제
-          </button>
-        </div>
-      </div>
+        <div className="wheel-layout">
+          <div className="wheel-wrapper">
+            <div className="pointer" />
 
-      <div className="wheel-layout">
-        <div className="wheel-wrapper">
-          {/* 포인터 */}
-          <div className="pointer" />
+            <svg
+              className="wheel-svg"
+              width={size}
+              height={size}
+              style={{
+                transform: `rotate(${rotation}deg)`,
+                transition: isSpinning
+                  ? "transform 2.5s cubic-bezier(0.22, 0.61, 0.36, 1)"
+                  : "none"
+              }}
+            >
+              <circle
+                cx={center}
+                cy={center}
+                r={radius}
+                fill="#111827"
+                stroke="#4b5563"
+                strokeWidth="3"
+              />
+              {slices.map((s) => (
+                <g key={s.id}>
+                  <path
+                    d={s.path}
+                    fill={s.color}
+                    stroke="#111827"
+                    strokeWidth="1"
+                  />
+                  {s.label && (
+                    <text
+                      x={s.labelPos.x}
+                      y={s.labelPos.y}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize="11"
+                      fill="#111827"
+                      style={{ pointerEvents: "none" }}
+                    >
+                      {s.label}
+                    </text>
+                  )}
+                </g>
+              ))}
+            </svg>
+          </div>
 
-          {/* RARE 연출 오버레이 */}
-          {rareWin && <div className="rare-overlay" />}
+          <div className="options-panel">
+            <div className="options-header">
+              <span>이름</span>
+              <span>확률(%)</span>
+              <span></span>
+            </div>
 
-          {/* SVG Wheel */}
-          <svg
-            className="wheel-svg"
-            width={size}
-            height={size}
-            style={{
-              transform: `rotate(${rotation}deg)`,
-              transition: isSpinning
-                ? "transform 2.5s cubic-bezier(0.22, 0.61, 0.36, 1)"
-                : "none"
-            }}
-          >
-            <circle
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="#111827"
-              stroke="#4b5563"
-              strokeWidth="3"
-            />
-            {slices.map((s) => (
-              <g key={s.id}>
-                <path
-                  d={s.path}
-                  fill={s.color}
-                  stroke="#111827"
-                  strokeWidth="1"
+            {wheel.options.map((opt) => (
+              <div className="option-row" key={opt.id}>
+                <input
+                  className="option-input"
+                  value={opt.label}
+                  onChange={(e) =>
+                    handleOptionChange(
+                      opt.id,
+                      "label",
+                      e.target.value
+                    )
+                  }
+                  placeholder="옵션 이름"
                 />
-                {s.label && (
-                  <text
-                    x={s.labelPos.x}
-                    y={s.labelPos.y}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontSize="11"
-                    fill="#111827"
-                    style={{ pointerEvents: "none" }}
-                  >
-                    {s.label}
-                  </text>
-                )}
-              </g>
+                <input
+                  className="option-input probability"
+                  type="number"
+                  min="0"
+                  value={opt.probability}
+                  onChange={(e) =>
+                    handleOptionChange(
+                      opt.id,
+                      "probability",
+                      e.target.value
+                    )
+                  }
+                />
+                <button
+                  className="icon-btn"
+                  onClick={() => removeOption(opt.id)}
+                  title="삭제"
+                >
+                  ✕
+                </button>
+              </div>
             ))}
-          </svg>
-        </div>
 
-        <div className="options-panel">
-          <div className="options-header">
-            <span>이름</span>
-            <span>확률(%)</span>
-            <span></span>
-          </div>
-
-          {wheel.options.map((opt) => (
-            <div className="option-row" key={opt.id}>
-              <input
-                className="option-input"
-                value={opt.label}
-                onChange={(e) =>
-                  handleOptionChange(opt.id, "label", e.target.value)
-                }
-                placeholder="옵션 이름"
-              />
-              <input
-                className="option-input probability"
-                type="number"
-                min="0"
-                value={opt.probability}
-                onChange={(e) =>
-                  handleOptionChange(
-                    opt.id,
-                    "probability",
-                    e.target.value
-                  )
-                }
-              />
-              <button
-                className="icon-btn"
-                onClick={() => removeOption(opt.id)}
-                title="삭제"
-              >
-                ✕
-              </button>
+            <div className="total-info">
+              입력 합계: <strong>{totalProbability}</strong>%{" "}
+              {totalProbability !== 100 &&
+                " (합이 100이 아니어도 비율 기준으로 동작합니다.)"}
             </div>
-          ))}
 
-          <div className="total-info">
-            입력 합계: <strong>{totalProbability}</strong>%{" "}
-            {totalProbability !== 100 &&
-              " (합이 100이 아니어도 비율 기준으로 동작합니다.)"}
+            <button
+              className="spin-btn"
+              onClick={spin}
+              disabled={isSpinning}
+            >
+              {isSpinning ? "도는 중..." : "돌리기"}
+            </button>
+
+            {result && (
+              <div className="result-label">
+                결과: <strong>{result}</strong>
+              </div>
+            )}
           </div>
-
-          <button
-            className="spin-btn"
-            onClick={spin}
-            disabled={isSpinning}
-          >
-            {isSpinning ? "도는 중..." : "돌리기"}
-          </button>
-
-          {result && (
-            <div className="result-label">
-              결과: <strong>{result}</strong>
-            </div>
-          )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
