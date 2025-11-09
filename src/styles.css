@@ -284,4 +284,76 @@
   .option-input.probability {
     text-align: right;
   }
+
+  .wheel-card.rare-win {
+    box-shadow:
+      0 0 25px rgba(251, 191, 36, 0.5),
+      0 0 60px rgba(56, 189, 248, 0.45);
+    border-color: #fbbf24;
+    position: relative;
+    animation: rare-shake 0.4s ease-in-out 0s 3;
+  }
+  
+  /* 상단 RARE 배너 */
+  .rare-banner {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 14px;
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      rgba(251, 191, 36, 1),
+      rgba(56, 189, 248, 1)
+    );
+    color: #020817;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 15;
+  }
+  
+  /* 휠 위 오버레이 (빛/파티클 느낌) */
+  .rare-overlay {
+    position: absolute;
+    inset: -6px;
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(251, 191, 36, 0.25), transparent),
+      radial-gradient(circle at 80% 0%, rgba(56, 189, 248, 0.25), transparent),
+      radial-gradient(circle at 50% 100%, rgba(244, 63, 94, 0.18), transparent);
+    mix-blend-mode: screen;
+    pointer-events: none;
+    animation: rare-overlay-pulse 0.8s ease-out forwards;
+    z-index: 10;
+  }
+  
+  /* 레어 당첨 시 흔들림 */
+  @keyframes rare-shake {
+    0% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+    100% { transform: translateX(0); }
+  }
+  
+  /* 레어 오버레이 펄스 */
+  @keyframes rare-overlay-pulse {
+    0% {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    30% {
+      opacity: 1;
+      transform: scale(1.02);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.1);
+    }
+  }
   

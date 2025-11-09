@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 const COLORS = [
   "#7dd3fc",
@@ -51,8 +51,18 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
   const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [result, setResult] = useState(null);
+  const [rareWin, setRareWin] = useState(false);
 
-  // 확률 합 (입력값이 그대로 % 의미. 합이 100이 아니면 비율 기준으로 처리)
+  const rareWinAudioRef = useRef(null);
+
+  // rare win용 사운드 준비 (public/rare-win.mp3 사용)
+  useEffect(() => {
+    if (typeof Audio !== "undefined") {
+      rareWinAudioRef.current = new Audio("/rare-win.mp3");
+    }
+  }, []);
+
+  // 확률 합
   const totalProbability = wheel.options.reduce((sum, o) => {
     const p = Number(o.probability);
     return sum + (p > 0 ? p : 0);
@@ -71,9 +81,7 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
               ...opt,
               [field]:
                 field === "probability"
-                  ? Number(value) >= 0
-                    ? Number(value)
-                    : 0
+                  ? Math.max(0, Number(value) || 0)
                   : value
             }
           : opt
@@ -102,12 +110,15 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
 
   const spin = () => {
     if (isSpinning) return;
+
     if (!wheel.options.length || totalProbability <= 0) {
       alert("옵션과 확률(%)을 먼저 설정해주세요.");
       return;
     }
 
-    // 확률(%) 기반 랜덤 선택
+    setRareWin(false); // 이전 rare 상태 초기화
+
+    // 확률 기반 랜덤 선택
     const r = Math.random() * totalProbability;
     let acc = 0;
     let chosen = wheel.options[0];
@@ -121,7 +132,22 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
       }
     }
 
-    // 각 옵션의 각도 범위를 계산해서, 포인터(위쪽)에 선택된 옵션이 오도록 회전값 계산
+    // "양수 확률 중 최저 확률"인지 체크
+    let isRare = false;
+    const positiveOptions = wheel.options.filter(
+      (o) => Number(o.probability) > 0
+    );
+
+    if (positiveOptions.length > 0 && Number(chosen.probability) > 0) {
+      const minProb = Math.min(
+        ...positiveOptions.map((o) => Number(o.probability))
+      );
+      if (Number(chosen.probability) === minProb) {
+        isRare = true;
+      }
+    }
+
+    // 각도 계산 (포인터 = 위쪽 90deg)
     let startAngle = 0;
     let chosenCenter = 0;
 
@@ -129,6 +155,7 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
       const p = Math.max(0, Number(opt.probability) || 0);
       const angle = (p / totalProbability) * 360;
       const endAngle = startAngle + angle;
+
       if (opt.id === chosen.id) {
         chosenCenter = startAngle + angle / 2;
       }
@@ -145,11 +172,30 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
 
     setTimeout(() => {
       setIsSpinning(false);
-      setResult(chosen.label || "(이름 없는 옵션)");
+      setResult(chosen.label || "(이름 없음)");
+
+      if (isRare) {
+        // 레어 연출 발동
+        setRareWin(true);
+
+        if (rareWinAudioRef.current) {
+          try {
+            rareWinAudioRef.current.currentTime = 0;
+            rareWinAudioRef.current.play();
+          } catch (e) {
+            console.warn("Rare win sound play failed:", e);
+          }
+        }
+
+        // 일정 시간 후 효과 제거
+        setTimeout(() => {
+          setRareWin(false);
+        }, 2200);
+      }
     }, 2600);
   };
 
-  // SVG 데이터
+  // SVG slice 계산
   const size = 260;
   const radius = size / 2 - 4;
   const center = size / 2;
@@ -173,24 +219,23 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
       mid
     );
 
-    // 실제 비율 (정규화된 확률)
-    const normalized =
-      totalProbability > 0
-        ? ((p / totalProbability) * 100).toFixed(1)
-        : 0;
-
     return {
       id: opt.id,
       path,
       color,
       label: opt.label || "",
-      displayProb: isFinite(normalized) ? normalized : 0,
       labelPos
     };
   });
 
   return (
-    <div className="wheel-card">
+    <div className={`wheel-card ${rareWin ? "rare-win" : ""}`}>
+      {rareWin && (
+        <div className="rare-banner">
+          🎉 RARE HIT! 🎉
+        </div>
+      )}
+
       <div className="wheel-header">
         <input
           className="wheel-title-input"
@@ -212,6 +257,9 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
         <div className="wheel-wrapper">
           {/* 포인터 */}
           <div className="pointer" />
+
+          {/* RARE 연출 오버레이 */}
+          {rareWin && <div className="rare-overlay" />}
 
           {/* SVG Wheel */}
           <svg
@@ -302,7 +350,7 @@ export default function Wheel({ wheel, index, onChange, onRemove }) {
           <div className="total-info">
             입력 합계: <strong>{totalProbability}</strong>%{" "}
             {totalProbability !== 100 &&
-              " (합이 100이 아니면 비율 기준으로 자동 계산됩니다.)"}
+              " (합이 100이 아니어도 비율 기준으로 동작합니다.)"}
           </div>
 
           <button
